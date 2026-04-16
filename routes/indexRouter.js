@@ -77,7 +77,6 @@ router.post("/posts/:id/new-comment", async (req, res) => {
   }
 });
 
-//TODO add the futer to get the time for the publish and the created time
 router.patch("/posts/:id/publish", authenticateToken, async (req, res) => {
   try {
     const targetPostId = parseInt(req.params.id);
@@ -145,7 +144,37 @@ router.put("/posts/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-//TODO updating the comments
+
+router.patch("/comments/:id", authenticateToken, async (req, res) => {
+  const targetCommentId = parseInt(req.params.id);
+  try {
+    const comment = await prisma.comment.findUnique({
+      where: { id: targetCommentId },
+    });
+    if (!comment) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+    const isOwner = comment.authorId === req.userData.userId;
+    const isAdmin = req.userData.isAdmin;
+
+    if (!isOwner && !isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to update this comment." });
+    }
+    const updatedComment = await prisma.comment.update({
+      where: { id: targetCommentId },
+      data: {
+        text: req.body.text,
+      },
+    });
+    res.json(updatedComment);
+  } catch (error) {
+    console.error("Failed to fetch commnet:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/new-post", authenticateToken, async (req, res) => {
   try {
     const newPost = await prisma.post.create({
@@ -220,8 +249,6 @@ router.post("/login", async (req, res) => {
     token: token,
   });
 });
-
-//TODO delet comment and also delet post
 
 router.delete("/post/:id", authenticateToken, async (req, res) => {
   const targetPostId = parseInt(req.params.id);
