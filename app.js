@@ -1,8 +1,6 @@
-// import path from "node:path";
 import express from "express";
 import "dotenv/config";
 import { router } from "./routes/indexRouter.js";
-import "./controllers/passport.js"; // Adjust the path to where your file is
 
 const app = express();
 app.use(express.json());
