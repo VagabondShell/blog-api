@@ -1,6 +1,8 @@
+import jwt from "jsonwebtoken";
 import express from "express";
 import bcrypt from "bcryptjs";
 import prisma from "../db/prisma.js";
+import { authenticateToken } from "../middleware/authenticate.js";
 
 const router = express.Router();
 
@@ -12,6 +14,33 @@ router.get("/posts", async (req, res) => {
     console.error("Failed to fetch posts:", error);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+router.get("/posts/:id", async (req, res) => {
+  try {
+    const targetPostId = parseInt(req.params.id);
+    const post = await prisma.post.findUnique({
+      where: {
+        username: targetPostId,
+      },
+    });
+    if (!post) return res.status(404).json({ error: "Post not found" });
+    res.json(post);
+  } catch (error) {
+    console.error("Failed to fetch posts:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/posts", authenticateToken, async (req, res) => {
+  try {
+    await prisma.post.create({
+      data: {
+        title: req.body.tile,
+        content: req.body.content,
+      },
+    });
+  } catch (error) {}
 });
 
 router.post("/sign-up", async (req, res) => {
@@ -48,10 +77,28 @@ router.post("/login", async (req, res) => {
   });
 
   if (!userFromDb) {
-    retur;
+    return res.status(401).json({ error: "Wrong username or password" });
   }
-  const { username, password, role } = userFromDb;
+  const { id, password, role } = userFromDb;
   const isPasswordValid = await bcrypt.compare(req.body.password, password);
+
+  if (!isPasswordValid) {
+    return res.status(401).json({ error: "Wrong username or password" });
+  }
+  const token = jwt.sign(
+    {
+      userId: id,
+      isAdmin: role, // The role you destructured
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "1h" }, // Token expires in 1 hour
+  );
+
+  // 2. Send it back to the client
+  res.json({
+    message: "Logged in successfully",
+    token: token,
+  });
 });
 
 router.get("/log-out", (req, res, next) => {
