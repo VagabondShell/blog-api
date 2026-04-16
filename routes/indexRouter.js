@@ -23,6 +23,10 @@ router.get("/posts/:id", async (req, res) => {
       where: {
         username: targetPostId,
       },
+      include: {
+        author: true,
+        comments: true,
+      },
     });
     if (!post) return res.status(404).json({ error: "Post not found" });
     res.json(post);
@@ -32,15 +36,90 @@ router.get("/posts/:id", async (req, res) => {
   }
 });
 
-router.post("/posts", authenticateToken, async (req, res) => {
+router.post("/new-post", authenticateToken, async (req, res) => {
   try {
-    await prisma.post.create({
+    const newPost = await prisma.post.create({
       data: {
-        title: req.body.tile,
+        title: req.body.title,
         content: req.body.content,
+        authorId: req.userData.userId,
       },
     });
-  } catch (error) {}
+    res.status(201).json(newPost);
+  } catch (error) {
+    console.error("Failed to create post:", error);
+    res.status(500).json({ error: "Could not create post" });
+  }
+});
+
+router.patch("/posts/:id/publish", authenticateToken, async (req, res) => {
+  try {
+    const targetPostId = parseInt(req.params.id);
+
+    const post = await prisma.post.findUnique({
+      where: { id: targetPostId },
+    });
+
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+    const isOwner = post.authorId === req.userData.userId;
+    const isAdmin = req.userData.isAdmin;
+
+    if (!isOwner && !isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to publish this post." });
+    }
+    const newPublishStatus = !post.published;
+
+    const updatedPost = await prisma.post.update({
+      where: { id: targetPostId },
+      data: {
+        published: newPublishStatus,
+      },
+    });
+    res.json({
+      message: newPublishStatus
+        ? "Post is now LIVE!"
+        : "Post is now HIDDEN (Unpublished).",
+      published: updatedPost.published,
+    });
+  } catch (error) {
+    console.error("Error toggling publish status:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/posts/:id", authenticateToken, async (req, res) => {
+  const targetPostId = parseInt(req.params.id);
+  try {
+    const post = await prisma.post.findUnique({
+      where: { id: targetPostId },
+    });
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+    const isOwner = post.authorId === req.userData.userId;
+    const isAdmin = req.userData.isAdmin;
+
+    if (!isOwner && !isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to update this post." });
+    }
+    const updatedPost = await prisma.post.update({
+      where: { id: targetPostId },
+      data: {
+        title: req.body.title || post.title,
+        content: req.body.content || post.content,
+      },
+    });
+    res.json({ updatedPost });
+  } catch (error) {
+    console.error("Error updating the post", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 router.post("/sign-up", async (req, res) => {
