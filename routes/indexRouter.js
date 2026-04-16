@@ -145,7 +145,7 @@ router.put("/posts/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
+//TODO updating the comments
 router.post("/new-post", authenticateToken, async (req, res) => {
   try {
     const newPost = await prisma.post.create({
@@ -221,12 +221,58 @@ router.post("/login", async (req, res) => {
   });
 });
 
-router.get("/log-out", (req, res, next) => {
-  req.logout((err) => {
-    if (err) {
-      return next(err);
-    }
-    res.redirect("/");
-  });
-});
 //TODO delet comment and also delet post
+
+router.delete("/post/:id", authenticateToken, async (req, res) => {
+  const targetPostId = parseInt(req.params.id);
+  try {
+    const post = await prisma.post.findUnique({
+      where: { id: targetPostId },
+    });
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+    const isOwner = post.authorId === req.userData.userId;
+    const isAdmin = req.userData.isAdmin;
+
+    if (!isOwner && !isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to delete this post." });
+    }
+    await prisma.post.delete({
+      where: { id: targetPostId },
+    });
+    res.json({ message: "Post successfully deleted." });
+  } catch (error) {
+    console.error("Failed to fetch posts:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/comments/:id", authenticateToken, async (req, res) => {
+  const targetCommentId = parseInt(req.params.id);
+  try {
+    const comment = await prisma.comment.findUnique({
+      where: { id: targetCommentId },
+    });
+    if (!comment) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+    const isOwner = comment.authorId === req.userData.userId;
+    const isAdmin = req.userData.isAdmin;
+
+    if (!isOwner && !isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to delete this comment." });
+    }
+    await prisma.comment.delete({
+      where: { id: targetCommentId },
+    });
+    res.json({ message: "Comment successfully deleted." });
+  } catch (error) {
+    console.error("Failed to fetch posts:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
