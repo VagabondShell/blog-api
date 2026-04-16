@@ -24,8 +24,17 @@ router.get("/posts/:id", async (req, res) => {
         username: targetPostId,
       },
       include: {
-        author: true,
-        comments: true,
+        author: {
+          select: { username: true },
+        },
+        comments: {
+          include: {
+            author: {
+              select: { username: true },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        },
       },
     });
     if (!post) return res.status(404).json({ error: "Post not found" });
@@ -36,22 +45,39 @@ router.get("/posts/:id", async (req, res) => {
   }
 });
 
-router.post("/new-post", authenticateToken, async (req, res) => {
+router.post("/posts/:id/new-comment", async (req, res) => {
   try {
-    const newPost = await prisma.post.create({
+    const postId = parseInt(req.params.id);
+
+    const post = await prisma.post.findUnique({
+      where: { id: postId },
+    });
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+    const isOwner = post.authorId === req.userData.userId;
+    const isAdmin = req.userData.isAdmin;
+
+    if (!isOwner && !isAdmin) {
+      return res
+        .status(403)
+        .json({ error: "You do not have permission to publish this post." });
+    }
+    const newComment = await prisma.comment.create({
       data: {
-        title: req.body.title,
-        content: req.body.content,
+        text: req.body.text,
+        postId: postId,
         authorId: req.userData.userId,
       },
     });
-    res.status(201).json(newPost);
+    res.json(newComment);
   } catch (error) {
-    console.error("Failed to create post:", error);
-    res.status(500).json({ error: "Could not create post" });
+    console.error("Failed to fetch posts:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
+//TODO add the futer to get the time for the publish and the created time
 router.patch("/posts/:id/publish", authenticateToken, async (req, res) => {
   try {
     const targetPostId = parseInt(req.params.id);
@@ -72,7 +98,6 @@ router.patch("/posts/:id/publish", authenticateToken, async (req, res) => {
         .json({ error: "You do not have permission to publish this post." });
     }
     const newPublishStatus = !post.published;
-
     const updatedPost = await prisma.post.update({
       where: { id: targetPostId },
       data: {
@@ -102,11 +127,10 @@ router.put("/posts/:id", authenticateToken, async (req, res) => {
     }
     const isOwner = post.authorId === req.userData.userId;
     const isAdmin = req.userData.isAdmin;
-
     if (!isOwner && !isAdmin) {
       return res
         .status(403)
-        .json({ error: "You do not have permission to update this post." });
+        .json({ error: "You do not have permission to updat this post." });
     }
     const updatedPost = await prisma.post.update({
       where: { id: targetPostId },
@@ -122,6 +146,23 @@ router.put("/posts/:id", authenticateToken, async (req, res) => {
   }
 });
 
+router.post("/new-post", authenticateToken, async (req, res) => {
+  try {
+    const newPost = await prisma.post.create({
+      data: {
+        title: req.body.title,
+        content: req.body.content,
+        authorId: req.userData.userId,
+      },
+    });
+    res.status(201).json(newPost);
+  } catch (error) {
+    console.error("Failed to create post:", error);
+    res.status(500).json({ error: "Could not create post" });
+  }
+});
+
+//auth
 router.post("/sign-up", async (req, res) => {
   if (req.body.password !== req.body.confirmPassword) {
     return res.status(400).send("Passwords do not match");
@@ -188,50 +229,4 @@ router.get("/log-out", (req, res, next) => {
     res.redirect("/");
   });
 });
-
-router.get("/new-message", (req, res, next) => {});
-
-router.post("/new-message", async (req, res, next) => {
-  try {
-    await pool.query(
-      "INSERT INTO messages (title, text, user_id) VALUES ($1, $2, $3)",
-      [req.body.title, req.body.text, req.user.id],
-    );
-    res.redirect("/");
-  } catch (err) {
-    return next(err);
-  }
-});
-
-router.post("/join-club", async (req, res, next) => {
-  try {
-    console.log(req.body.passcode);
-    if (req.body.passcode === process.env.CLUB_PASSCODE) {
-      console.log("the condition is true");
-      await pool.query(
-        "UPDATE users SET membership_status = TRUE  WHERE id = $1",
-        [req.user.id],
-      );
-      res.redirect("/");
-    } else {
-      //message that the pass is wrong
-      res.redirect("/");
-    }
-  } catch (err) {
-    return next(err);
-  }
-});
-
-router.post("/delete-message/:id", async (req, res, next) => {
-  const messsageId = req.params.id;
-  if (!req.user || !req.user.admin) {
-    return res.status(403).send("Unauthorized");
-  }
-  try {
-    await pool.query("DELETE FROM messages WHERE id = $1", [messsageId]);
-    res.redirect("/");
-  } catch (err) {
-    return next(err);
-  }
-});
-export { router };
+//TODO delet comment and also delet post
