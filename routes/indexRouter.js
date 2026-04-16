@@ -8,7 +8,11 @@ const router = express.Router();
 
 router.get("/posts", async (req, res) => {
   try {
-    const allPosts = await prisma.post.findMany();
+    const allPosts = await prisma.post.findMany({
+      where: {
+        published: true,
+      },
+    });
     res.json(allPosts);
   } catch (error) {
     console.error("Failed to fetch posts:", error);
@@ -21,7 +25,7 @@ router.get("/posts/:id", async (req, res) => {
     const targetPostId = parseInt(req.params.id);
     const post = await prisma.post.findUnique({
       where: {
-        username: targetPostId,
+        id: targetPostId,
       },
       include: {
         author: {
@@ -38,9 +42,12 @@ router.get("/posts/:id", async (req, res) => {
       },
     });
     if (!post) return res.status(404).json({ error: "Post not found" });
+    if (post.published === false) {
+      return res.status(404).json({ error: "Post not found" });
+    }
     res.json(post);
   } catch (error) {
-    console.error("Failed to fetch posts:", error);
+    console.error("Failed to fetch post:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -61,7 +68,7 @@ router.post("/posts/:id/new-comment", async (req, res) => {
     if (!isOwner && !isAdmin) {
       return res
         .status(403)
-        .json({ error: "You do not have permission to publish this post." });
+        .json({ error: "You do not have permission to comment on this post." });
     }
     const newComment = await prisma.comment.create({
       data: {
@@ -250,7 +257,7 @@ router.post("/login", async (req, res) => {
   });
 });
 
-router.delete("/post/:id", authenticateToken, async (req, res) => {
+router.delete("/posts/:id", authenticateToken, async (req, res) => {
   const targetPostId = parseInt(req.params.id);
   try {
     const post = await prisma.post.findUnique({
