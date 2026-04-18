@@ -1,12 +1,12 @@
 import express from "express";
 import "dotenv/config";
-import { router } from "./routes/indexRouter.js";
+import indexRouter from "./routes/indexRouter.js";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(router);
+app.use(indexRouter);
 
 // 6. Server Initialization
 const PORT = process.env.PORT || 3000;
